@@ -1,19 +1,17 @@
 import { useState } from "react";
 import axios from "axios";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 import NoteForm from "../NoteForm/NoteForm";
 import NoteList from "../NoteList/NoteList";
 import Modal from "../Modal/Modal";
 import Pagination from "../Pagination/Pagination";
 import SearchBox from "../SearchBox/SearchBox";
-import { createNote, deleteNote, fetchNotes } from "../../services/noteService";
-import type { NewNotePayload } from "../../types/note";
+import { fetchNotes } from "../../services/noteService";
 import css from "./App.module.css";
 
 export default function App() {
   const token = import.meta.env.VITE_NOTEHUB_TOKEN?.trim() ?? "";
-  const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -31,20 +29,7 @@ export default function App() {
     queryKey: ["notes", page, perPage, search],
     queryFn: () => fetchNotes({ page, perPage, search }),
     enabled: canWorkWithNotes,
-  });
-
-  const createNoteMutation = useMutation({
-    mutationFn: (payload: NewNotePayload) => createNote(payload),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["notes"] });
-    },
-  });
-
-  const deleteNoteMutation = useMutation({
-    mutationFn: (noteId: string) => deleteNote(noteId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["notes"] });
-    },
+    placeholderData: keepPreviousData,
   });
 
   const notes = notesQuery.data?.notes ?? [];
@@ -53,15 +38,6 @@ export default function App() {
   function handleSearchChange(value: string) {
     setSearchInput(value);
     debouncedSearch(value);
-  }
-
-  async function handleCreateNote(values: NewNotePayload) {
-    await createNoteMutation.mutateAsync(values);
-    setIsModalOpen(false);
-  }
-
-  function handleDeleteNote(noteId: string) {
-    deleteNoteMutation.mutate(noteId);
   }
 
   let errorMessage = "";
@@ -107,22 +83,12 @@ export default function App() {
 
       {errorMessage && <p className={css.error}>{errorMessage}</p>}
 
-      {notes.length > 0 && (
-        <NoteList
-          notes={notes}
-          onDelete={handleDeleteNote}
-          deleting={deleteNoteMutation.isPending}
-        />
-      )}
+      {notes.length > 0 && <NoteList notes={notes} />}
 
       {isModalOpen && (
         <Modal onClose={() => setIsModalOpen(false)}>
           <h2 className={css.modalTitle}>Create note</h2>
-          <NoteForm
-            onCancel={() => setIsModalOpen(false)}
-            onSubmit={handleCreateNote}
-            isSubmitting={createNoteMutation.isPending}
-          />
+          <NoteForm onCancel={() => setIsModalOpen(false)} />
         </Modal>
       )}
     </div>

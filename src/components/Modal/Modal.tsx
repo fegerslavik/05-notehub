@@ -24,6 +24,15 @@ export default function Modal({ children, onClose }: ModalProps) {
     };
   }, [onClose]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   function handleBackdropClick(event: MouseEvent<HTMLDivElement>) {
     if (event.currentTarget === event.target) {
       onClose();

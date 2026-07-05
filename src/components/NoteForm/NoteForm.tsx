@@ -1,12 +1,13 @@
-import { Formik } from "formik";
+import { ErrorMessage, Formik } from "formik";
 import * as Yup from "yup";
+import axios from "axios";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createNote } from "../../services/noteService";
 import { NOTE_TAGS, type NewNotePayload } from "../../types/note";
 import css from "./NoteForm.module.css";
 
 interface NoteFormProps {
-  onSubmit: (values: NewNotePayload) => Promise<void>;
   onCancel: () => void;
-  isSubmitting: boolean;
 }
 
 const validationSchema = Yup.object({
@@ -26,28 +27,38 @@ const initialValues: NewNotePayload = {
   tag: "Todo",
 };
 
-export default function NoteForm({
-  onSubmit,
-  onCancel,
-  isSubmitting,
-}: NoteFormProps) {
+export default function NoteForm({ onCancel }: NoteFormProps) {
+  const queryClient = useQueryClient();
+
+  const createNoteMutation = useMutation({
+    mutationFn: (payload: NewNotePayload) => createNote(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notes"] });
+      onCancel();
+    },
+  });
+
+  let submitError = "";
+  if (createNoteMutation.error) {
+    if (axios.isAxiosError<{ message?: string }>(createNoteMutation.error)) {
+      submitError =
+        createNoteMutation.error.response?.data?.message ??
+        createNoteMutation.error.message;
+    } else {
+      submitError = "Failed to create note";
+    }
+  }
+
   return (
     <Formik
       initialValues={initialValues}
       validationSchema={validationSchema}
       onSubmit={async (values, helpers) => {
-        await onSubmit(values);
+        await createNoteMutation.mutateAsync(values);
         helpers.resetForm();
       }}
     >
-      {({
-        values,
-        errors,
-        touched,
-        handleChange,
-        handleBlur,
-        handleSubmit,
-      }) => (
+      {({ values, handleChange, handleBlur, handleSubmit }) => (
         <form className={css.form} onSubmit={handleSubmit}>
           <div className={css.formGroup}>
             <label htmlFor="title">Title</label>
@@ -60,9 +71,7 @@ export default function NoteForm({
               onChange={handleChange}
               onBlur={handleBlur}
             />
-            <span data-name="title" className={css.error}>
-              {touched.title ? errors.title : ""}
-            </span>
+            <ErrorMessage name="title" component="span" className={css.error} />
           </div>
 
           <div className={css.formGroup}>
@@ -76,9 +85,11 @@ export default function NoteForm({
               onChange={handleChange}
               onBlur={handleBlur}
             />
-            <span data-name="content" className={css.error}>
-              {touched.content ? errors.content : ""}
-            </span>
+            <ErrorMessage
+              name="content"
+              component="span"
+              className={css.error}
+            />
           </div>
 
           <div className={css.formGroup}>
@@ -97,10 +108,10 @@ export default function NoteForm({
               <option value="Meeting">Meeting</option>
               <option value="Shopping">Shopping</option>
             </select>
-            <span data-name="tag" className={css.error}>
-              {touched.tag ? errors.tag : ""}
-            </span>
+            <ErrorMessage name="tag" component="span" className={css.error} />
           </div>
+
+          {submitError && <span className={css.error}>{submitError}</span>}
 
           <div className={css.actions}>
             <button
@@ -113,7 +124,7 @@ export default function NoteForm({
             <button
               type="submit"
               className={css.submitButton}
-              disabled={isSubmitting}
+              disabled={createNoteMutation.isPending}
             >
               Create note
             </button>
